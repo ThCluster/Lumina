@@ -1,0 +1,6 @@
+{
+  "name": "Lumina E-Commerce",
+  "description": "Boutique e-commerce complète avec gestion des comptes, catalogue interactif, panier, validation cohérente des commandes, décrémentation automatique des stocks, suivi des commandes et avis vérifiés.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
