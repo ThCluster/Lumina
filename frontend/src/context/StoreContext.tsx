@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from 'react';
 import { Product, CartItem, Order, Review, User, ShippingAddress, ConsistencyValidation } from '../types';
 import { INITIAL_PRODUCTS, INITIAL_REVIEWS, DEMO_USER } from '../data/mockProducts';
+import api from '../services/api';
 
 interface ToastNotification {
   id: string;
@@ -83,6 +84,20 @@ const STORAGE_KEYS = {
   CART: 'lumina_cart_v1'
 };
 
+const normalizeUser = (user: any): User => ({
+  id: user?._id ?? user?.id ?? `user-${Date.now()}`,
+  name: user?.nom ?? user?.name ?? 'Utilisateur',
+  email: user?.email ?? '',
+  phone: user?.phone ?? '',
+  address: user?.address ?? {
+    street: '12 Avenue des Champs-Élysées',
+    postalCode: '75008',
+    city: 'Paris',
+    country: 'France'
+  },
+  createdAt: user?.createdAt ?? new Date().toISOString(),
+});
+
 export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   // Load products with local persistence
   const [products, setProducts] = useState<Product[]>(() => {
@@ -94,6 +109,46 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }
     return INITIAL_PRODUCTS;
   });
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadProductsFromApi = async () => {
+      try {
+        const data = await api.getProducts();
+        if (!cancelled && Array.isArray(data) && data.length > 0) {
+          const mappedProducts: Product[] = data.map((product: any) => ({
+            id: product.id ?? product._id,
+            name: product.name ?? product.nom,
+            tagline: product.tagline ?? product.description ?? 'Produit Lumina',
+            brand: product.brand ?? 'Lumina',
+            category: product.category ?? 'Divers',
+            price: Number(product.price ?? product.prix ?? 0),
+            originalPrice: product.originalPrice ?? undefined,
+            rating: Number(product.rating ?? 4.5),
+            reviewCount: Number(product.reviewCount ?? 0),
+            stock: Number(product.stock ?? 0),
+            initialStock: Number(product.initialStock ?? product.stock ?? 0),
+            image: product.image ?? product.images?.[0] ?? '',
+            images: Array.isArray(product.images) ? product.images : [product.image ?? ''],
+            description: product.description ?? 'Produit disponible en boutique.',
+            features: Array.isArray(product.features) ? product.features : [],
+            badge: product.badge ?? undefined,
+          }));
+
+          setProducts(mappedProducts);
+        }
+      } catch (error) {
+        console.warn('Unable to load products from backend, using local demo data.', error);
+      }
+    };
+
+    loadProductsFromApi();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Load reviews
   const [reviews, setReviews] = useState<Review[]>(() => {
@@ -267,7 +322,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   };
 
   // Auth functions
-  const register = async (name: string, email: string, _password?: string, address?: User['address'], phone?: string): Promise<boolean> => {
+  const register = async (name: string, email: string, password?: string, address?: User['address'], phone?: string): Promise<boolean> => {
     const trimmedEmail = email.trim().toLowerCase();
     const existing = usersList.find((u) => u.email.toLowerCase() === trimmedEmail);
     if (existing) {
@@ -275,61 +330,88 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       return false;
     }
 
-    const newUser: User = {
-      id: `user-${Date.now()}`,
-      name: name.trim(),
-      email: trimmedEmail,
-      phone: phone || '',
-      address: address || {
-        street: '12 Avenue des Champs-Élysées',
-        postalCode: '75008',
-        city: 'Paris',
-        country: 'France'
-      },
-      createdAt: new Date().toISOString()
-    };
-
-    setUsersList((prev) => [...prev, newUser]);
-    setCurrentUser(newUser);
     try {
+      const result = await api.register(trimmedEmail, password ?? '', name.trim());
+      const newUser = normalizeUser({
+        _id: result?.id ?? `user-${Date.now()}`,
+        name: name.trim(),
+        email: trimmedEmail,
+        phone: phone || '',
+        address: address || {
+          street: '12 Avenue des Champs-Élysées',
+          postalCode: '75008',
+          city: 'Paris',
+          country: 'France'
+        },
+        createdAt: new Date().toISOString(),
+      });
+
+      setUsersList((prev) => [...prev, newUser]);
+      setCurrentUser(newUser);
       localStorage.setItem('lumina_explicitly_logged_in', 'true');
-    } catch (e) {
-      console.error(e);
+      setActiveView('catalog');
+      addToast(`Compte créé avec succès ! Bienvenue, ${newUser.name}.`, 'success');
+      return true;
+    } catch (error) {
+      const newUser: User = {
+        id: `user-${Date.now()}`,
+        name: name.trim(),
+        email: trimmedEmail,
+        phone: phone || '',
+        address: address || {
+          street: '12 Avenue des Champs-Élysées',
+          postalCode: '75008',
+          city: 'Paris',
+          country: 'France'
+        },
+        createdAt: new Date().toISOString()
+      };
+
+      setUsersList((prev) => [...prev, newUser]);
+      setCurrentUser(newUser);
+      localStorage.setItem('lumina_explicitly_logged_in', 'true');
+      setActiveView('catalog');
+      addToast(`Compte créé avec succès ! Bienvenue, ${newUser.name}.`, 'success');
+      return true;
     }
-    setActiveView('catalog');
-    addToast(`Compte créé avec succès ! Bienvenue, ${newUser.name}.`, 'success');
-    return true;
   };
 
-  const login = async (email: string, _password?: string): Promise<boolean> => {
+  const login = async (email: string, password?: string): Promise<boolean> => {
     const trimmedEmail = email.trim().toLowerCase();
-    const found = usersList.find((u) => u.email.toLowerCase() === trimmedEmail);
-    if (found) {
-      setCurrentUser(found);
-      try {
-        localStorage.setItem('lumina_explicitly_logged_in', 'true');
-      } catch (e) {
-        console.error(e);
-      }
-      setActiveView('catalog');
-      addToast(`Ravi de vous revoir, ${found.name} !`, 'success');
-      return true;
-    }
-    // If not found in custom list, check if it's the demo email
-    if (trimmedEmail === DEMO_USER.email.toLowerCase()) {
-      setCurrentUser(DEMO_USER);
-      try {
-        localStorage.setItem('lumina_explicitly_logged_in', 'true');
-      } catch (e) {
-        console.error(e);
-      }
-      setActiveView('catalog');
-      addToast(`Connecté avec le compte de démonstration (${DEMO_USER.name})`, 'success');
-      return true;
-    }
 
-    addToast('Identifiants incorrects ou compte introuvable.', 'error');
-    return false;
+    try {
+      const backendUser = await api.login(trimmedEmail, password ?? '');
+      const normalizedUser = normalizeUser(backendUser);
+      setCurrentUser(normalizedUser);
+      setUsersList((prev) => {
+        const exists = prev.some((u) => u.email.toLowerCase() === normalizedUser.email.toLowerCase());
+        return exists ? prev.map((u) => (u.email.toLowerCase() === normalizedUser.email.toLowerCase() ? normalizedUser : u)) : [...prev, normalizedUser];
+      });
+      localStorage.setItem('lumina_explicitly_logged_in', 'true');
+      setActiveView('catalog');
+      addToast(`Ravi de vous revoir, ${normalizedUser.name} !`, 'success');
+      return true;
+    } catch (error) {
+      const found = usersList.find((u) => u.email.toLowerCase() === trimmedEmail);
+      if (found) {
+        setCurrentUser(found);
+        localStorage.setItem('lumina_explicitly_logged_in', 'true');
+        setActiveView('catalog');
+        addToast(`Ravi de vous revoir, ${found.name} !`, 'success');
+        return true;
+      }
+
+      if (trimmedEmail === DEMO_USER.email.toLowerCase()) {
+        setCurrentUser(DEMO_USER);
+        localStorage.setItem('lumina_explicitly_logged_in', 'true');
+        setActiveView('catalog');
+        addToast(`Connecté avec le compte de démonstration (${DEMO_USER.name})`, 'success');
+        return true;
+      }
+
+      addToast('Identifiants incorrects ou compte introuvable.', 'error');
+      return false;
+    }
   };
 
   const loginDemoUser = () => {
@@ -390,11 +472,19 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       return false;
     }
 
+    if (currentUser) {
+      try {
+        api.addToCart(currentUser.id, productId, quantity);
+      } catch (error) {
+        console.warn('Cart sync failed, kept local cart fallback.', error);
+      }
+    }
+
     setCart((prev) => {
       if (existingCartItem) {
         return prev.map((item) =>
           item.product.id === productId
-            ? { ...item, quantity: item.quantity + quantity, product } // update with fresh product ref
+            ? { ...item, quantity: item.quantity + quantity, product }
             : item
         );
       }
@@ -580,7 +670,6 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     shippingAddress: ShippingAddress,
     paymentMethod: 'card' | 'paypal' | 'applepay'
   ): Promise<{ success: boolean; order?: Order; error?: string }> => {
-    // 1. Strict consistency check
     const check = verifyOrderConsistency();
     if (!check.isValid) {
       const primaryError = check.errors[0] || 'Incohérence détectée dans votre commande.';
@@ -588,7 +677,6 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       return { success: false, error: primaryError };
     }
 
-    // 2. Prepare user reference
     const orderUser = currentUser || {
       id: `guest-${Date.now()}`,
       name: shippingAddress.fullName,
@@ -603,7 +691,6 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       createdAt: new Date().toISOString()
     };
 
-    // 3. Atomically decrement stock for all ordered products (Requirement 7)
     setProducts((prevProducts) => {
       const updated = prevProducts.map((prod) => {
         const cartItem = cart.find((item) => item.product.id === prod.id);
@@ -616,7 +703,14 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       return updated;
     });
 
-    // 4. Construct Order record
+    try {
+      if (orderUser.id) {
+        await api.placeOrder(orderUser.id, shippingAddress.street || '');
+      }
+    } catch (error) {
+      console.warn('Order API sync failed; local order flow kept as fallback.', error);
+    }
+
     const orderNumber = `CMD-2026-${Math.floor(1000 + Math.random() * 9000)}`;
     const trackingNumber = `FR${Math.floor(100000000 + Math.random() * 900000000)}COL`;
 
@@ -659,11 +753,8 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       createdAt: Date.now()
     };
 
-    // 5. Store order
     setOrders((prev) => [newOrder, ...prev]);
     setCurrentCompletedOrder(newOrder);
-
-    // 6. Reset cart
     clearCart();
     setPromoCode('');
     setAppliedDiscount(0);
@@ -725,6 +816,14 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       return { success: false, error: 'Champs incomplets' };
     }
 
+    try {
+      if (currentUser) {
+        api.addReview(currentUser.id, productId, Math.max(1, Math.min(5, rating)), comment.trim());
+      }
+    } catch (error) {
+      console.warn('Review API sync failed; local review kept as fallback.', error);
+    }
+
     const newReview: Review = {
       id: `rev-${Date.now()}`,
       productId,
@@ -737,11 +836,9 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       verifiedPurchase: true
     };
 
-    // Add review
     const updatedReviews = [newReview, ...reviews];
     setReviews(updatedReviews);
 
-    // Dynamically update product average rating and count
     const productReviews = updatedReviews.filter((r) => r.productId === productId);
     const avgRating = Math.round((productReviews.reduce((sum, r) => sum + r.rating, 0) / productReviews.length) * 10) / 10;
 
