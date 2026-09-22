@@ -109,12 +109,12 @@ Vérifie que la base `lumina` existe et contient des collections comme :
 
 Les comptes de démonstration suivants existent dans la base :
 
-- alice@lumina.fr / 1234
-- benoit@lumina.fr / 1234
-- camille@lumina.fr / 1234
-- dorian@lumina.fr / 1234
-- emma@lumina.fr / 1234
-- fabrice@lumina.fr / 1234
+- alice@lumina.fr / 
+- benoit@lumina.fr / 
+- camille@lumina.fr / 
+- dorian@lumina.fr / 
+- emma@lumina.fr / 
+- fabrice@lumina.fr / 
 
 ## 9. Structure du projet
 
