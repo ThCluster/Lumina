@@ -1,0 +1,152 @@
+FastAPI — révision simple
+
+1) Qu’est-ce que FastAPI ?
+FastAPI est un framework Python pour créer des API web.
+Une API, c’est un moyen pour un site ou une application de parler avec un backend.
+
+Exemple simple :
+- le frontend React demande les produits
+- le backend FastAPI répond en JSON
+
+
+2) Pourquoi on l’utilise ?
+Parce qu’il est :
+- rapide
+- simple à écrire
+- très pratique pour créer des routes API
+- compatible avec Python moderne
+
+
+3) Ce qu’on appelle une route
+Une route est une URL que l’application sait traiter.
+
+Exemple :
+- /api/produits
+- /api/utilisateurs/connexion
+- /api/commandes
+
+Quand un navigateur ou un frontend envoie une requête sur une de ces URLs, FastAPI répond.
+
+
+4) Exemple de route simple
+from fastapi import FastAPI
+
+app = FastAPI()
+
+@app.get("/api/health")
+def health_check():
+    return {"status": "ok"}
+
+Explication :
+- FastAPI() crée l’application
+- @app.get("/api/health") = la route GET
+- health_check() = fonction qui traite la demande
+- return {"status": "ok"} = réponse JSON
+
+
+5) JSON
+FastAPI répond souvent en JSON.
+JSON ressemble à ceci :
+
+{
+  "status": "ok",
+  "message": "Compte créé"
+}
+
+C’est le format standard utilisé par le frontend pour récupérer des données.
+
+
+6) Les méthodes HTTP les plus utilisées
+- GET = lire des données
+- POST = créer ou envoyer des données
+- PUT = modifier complètement
+- DELETE = supprimer
+
+Dans ce projet, on utilise surtout :
+- GET pour lire les produits, historique, panier
+- POST pour créer un compte, se connecter, ajouter au panier, passer une commande, ajouter un avis
+
+
+7) Exemple concret du projet
+Dans ce projet, le backend FastAPI sert de couche web entre le frontend et MongoDB.
+
+Le frontend (React) fait une requête :
+http://localhost:8000/api/produits
+
+Le backend répond comme ceci :
+[
+  {"_id": "prod-1", "name": "Casque Studio..."},
+  {"_id": "prod-2", "name": "Lampe..."}
+]
+
+Ensuite, le frontend affiche ces produits à l’écran.
+
+
+8) Liaison entre FastAPI et MongoDB
+FastAPI ne stocke pas directement les données dans le code.
+Il appelle les fonctions Python qui parlent à MongoDB.
+
+Exemple logique :
+
+- FastAPI reçoit une requête
+- FastAPI appelle une fonction comme : creer_compte(...)
+- cette fonction interagit avec MongoDB
+- MongoDB renvoie le résultat
+- FastAPI répond en JSON
+
+Donc :
+FastAPI = couche API
+MongoDB = stockage des données
+
+
+9) CORS
+CORS permet au frontend (port 3000) de parler au backend (port 8000).
+Sans CORS, le navigateur bloque souvent les appels.
+
+Dans le projet, on configure :
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+Cela permet au frontend de faire des requêtes vers le backend localement.
+
+
+10) Exemple de route du projet
+@app.get("/api/produits")
+def api_lister_catalogue():
+    return lister_catalogue()
+
+Cela signifie :
+- quand on va sur /api/produits
+- on appelle la fonction lister_catalogue()
+- puis on renvoie le résultat au frontend
+
+
+11) Les données et le JSON
+FastAPI transforme automatiquement les objets Python en JSON.
+Donc une liste de produits, un dictionnaire, un message, tout peut être renvoyé de façon lisible.
+
+
+12) Pourquoi c’est pratique
+FastAPI est utile parce que :
+- il organise bien le backend
+- il gère les routes proprement
+- il rend les réponses faciles à consommer par le frontend
+- il fonctionne très bien avec MongoDB
+
+
+13) Résumé très simple
+FastAPI = framework Python pour créer des API.
+Il reçoit les demandes du frontend, appelle les fonctions backend, puis renvoie des réponses JSON.
+
+Dans ce projet, FastAPI sert de pont entre :
+- le frontend React
+- la base MongoDB
+
+
+14) En une phrase
+FastAPI est le chef d’orchestre qui dit : “quand tu demandes ça, je vais chercher les infos dans MongoDB et je te réponds en JSON”.

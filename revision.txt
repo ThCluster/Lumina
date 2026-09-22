@@ -1,0 +1,201 @@
+MongoDB — révision simple et claire
+
+1) Qu’est-ce que MongoDB ?
+MongoDB est une base de données NoSQL.
+Contrairement à MySQL, elle ne stocke pas les données dans des tables classiques.
+Elle stocke les données dans des documents ressemblant à des objets JSON.
+
+Exemple :
+{
+  "_id": "123",
+  "email": "alice@lumina.fr",
+  "nom": "Alice",
+  "mot_de_passe": "1234"
+}
+
+
+2) Ce qu’on appelle une base, une collection et un document
+- Base de données = un conteneur principal
+- Collection = un ensemble de documents
+- Document = une ligne de données, comme un objet
+
+Exemple :
+- base : lumina
+- collection : utilisateurs
+- document : un compte utilisateur
+
+
+3) Connexion à la base MongoDB
+Dans le projet, on utilise un client MongoDB avec Python :
+
+from pymongo import MongoClient
+
+client = MongoClient("mongodb://localhost:27017/")
+db = client["lumina"]
+
+Explication :
+- MongoClient(...) = connexion au serveur Mongo
+- localhost:27017 = adresse locale standard de MongoDB
+- client["lumina"] = choix de la base lumina
+
+
+4) Récupérer la base
+On a une fonction qui renvoie la base :
+
+from .database import get_db
+
+db = get_db()
+
+Ensuite on peut faire :
+- db.utilisateurs
+- db.produits
+- db.commandes
+
+Chaque nom après db est une collection.
+
+
+5) CRUD en MongoDB
+CRUD = Create, Read, Update, Delete
+
+A) Create = ajouter un document
+
+db.utilisateurs.insert_one({
+    "email": "alice@lumina.fr",
+    "nom": "Alice",
+    "mot_de_passe": "1234"
+})
+
+Cela ajoute 1 document dans la collection utilisateurs.
+
+B) Read = lire des données
+
+db.utilisateurs.find_one({"email": "alice@lumina.fr"})
+
+Cette commande retourne le premier document correspondant.
+
+Pour récupérer plusieurs documents :
+
+db.utilisateurs.find({})
+
+C) Update = modifier des données
+
+db.utilisateurs.update_one(
+    {"email": "alice@lumina.fr"},
+    {"$set": {"nom": "Alice Martin"}}
+)
+
+Cela change seulement un champ du document.
+
+D) Delete = supprimer des données
+
+db.utilisateurs.delete_one({"email": "alice@lumina.fr"})
+
+Cela supprime 1 document correspondant.
+
+
+6) Exemple concret du projet
+Le projet contient :
+- db.produits
+- db.utilisateurs
+- db.commandes
+- db.paniers
+- db.avis
+
+Exemple :
+
+# créer un compte
+result = db.utilisateurs.insert_one({
+    "email": "bob@lumina.fr",
+    "mot_de_passe": "1234",
+    "nom": "Bob"
+})
+
+# vérifier si un user existe
+user = db.utilisateurs.find_one({"email": "bob@lumina.fr"})
+
+# lister les produits
+produits = list(db.produits.find({}))
+
+
+7) La sécurité et la cohérence d’une commande MongoDB
+MongoDB permet de regrouper plusieurs opérations dans une transaction.
+C’est important quand on veut s’assurer que tout se passe ensemble, sans erreur partielle.
+
+Exemple :
+- on crée une commande
+- on vide le panier
+- on met à jour le stock
+
+Si une étape échoue, il faut annuler les autres.
+
+Dans le projet, on utilise :
+
+with db.client.start_session() as session:
+    with session.start_transaction():
+        commande_id = db.commandes.insert_one(commande, session=session).inserted_id
+        db.paniers.update_one({"user_id": user_id}, {"$set": {"items": []}}, session=session)
+
+Pourquoi c’est important ?
+Parce que sans transaction :
+- la commande peut être créée
+- mais le panier ne se vide pas
+- ou l’inverse
+
+Cela casse la cohérence de la base.
+
+La transaction garantit :
+- soit tout fonctionne,
+- soit rien ne reste en place.
+
+C’est la garantie de cohérence de la commande.
+
+
+8) Exemple de transaction simple
+
+with db.client.start_session() as session:
+    with session.start_transaction():
+        db.commandes.insert_one({"user_id": "u1", "total": 120}, session=session)
+        db.paniers.update_one({"user_id": "u1"}, {"$set": {"items": []}}, session=session)
+
+Donc on exécute plusieurs actions comme un seul bloc logique.
+
+
+9) Pourquoi MongoDB est adapté ici
+Parce que le projet a besoin de:
+- produits
+- paniers
+- utilisateurs
+- commandes
+- avis
+
+On manipule souvent des objets complets, donc MongoDB est très pratique.
+C’est plus simple à utiliser pour des données qui changent souvent et qui ne sont pas forcément tabulaires.
+
+
+10) Résumé très simple
+MongoDB = base de données qui stocke des documents JSON-like.
+
+On manipule :
+- insert_one() pour créer
+- find_one() ou find() pour lire
+- update_one() pour modifier
+- delete_one() pour supprimer
+
+Et pour garantir la cohérence d’une commande, on utilise les transactions MongoDB.
+
+
+11) Ce qui est important à retenir pour ce projet
+- La base utilisée est : lumina
+- La connexion locale est : mongodb://localhost:27017/
+- Les collections du projet sont :
+  - produits
+  - utilisateurs
+  - commandes
+  - paniers
+  - avis
+- Les données doivent rester cohérentes
+- Les transactions assurent que plusieurs actions liées ensemble ne se cassent pas
+
+
+12) En une phrase
+MongoDB sert à stocker les données du projet en documents, et les transactions permettent de garantir qu’une commande est bien enregistrée de manière cohérente, sans demi-erreurs.
